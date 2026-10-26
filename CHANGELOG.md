@@ -12,6 +12,10 @@
 
 ### Fixes
 
+- `core/ldap/bulkImport` keeps the `fixed` attributes of its schema on both
+  creation and `updateExisting`, whatever a CSV column of that name carried:
+  a column named `objectClass` (or any other fixed attribute) overwrote the
+  fixed value ([#445](https://github.com/linagora/ldap-rest/issues/445))
 - `--logger` takes `console` or `file`, with `--log-file` naming the file;
   an empty value is `console`, any other stops the server at startup,
   [upgrading](docs/usage/upgrading.md#--logger-console-or-file)

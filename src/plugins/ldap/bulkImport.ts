@@ -552,28 +552,32 @@ export default class LdapBulkImport extends DmPlugin {
     const orgDn = csvLine.organizationDn;
     delete csvLine.organizationDn;
 
-    // 2. Add fixed fields from schema
-    for (const [attr, def] of Object.entries(schema.properties || {})) {
-      if (def.fixed === true) {
-        const value = def.default || def.const;
-        if (value !== undefined) {
-          entry[attr] = value;
-        }
-      }
-    }
-
-    // 3. Add fields from CSV. Empty cells are skipped whatever their column
+    // 2. Add fields from CSV. Empty cells are skipped whatever their column
     // is called, so a spreadsheet's comment column or a trailing comma still
-    // imports; only a value under a name that is not an attribute fails.
+    // imports; only a value under a name that is not an attribute fails. A
+    // column naming a fixed attribute is ignored in favour of the schema.
     for (const [attr, value] of Object.entries(csvLine)) {
       if (value && value.trim() !== '') {
         if (!CSV_COLUMN_NAME.test(attr)) {
           throw new Error(`Invalid column name: ${attr}`);
         }
+        if (!attr.includes(';') && this.isFixedAttribute(schema, attr)) {
+          continue;
+        }
         // Support multi-value: "val1;val2;val3"
         entry[attr] = value.includes(';')
           ? value.split(';').map(v => v.trim())
           : value;
+      }
+    }
+
+    // 3. Add fixed fields from schema
+    for (const [attr, def] of Object.entries(schema.properties || {})) {
+      if (def.fixed === true) {
+        const value = def.default ?? def.const;
+        if (value !== undefined) {
+          entry[attr] = value;
+        }
       }
     }
 
@@ -625,6 +629,17 @@ export default class LdapBulkImport extends DmPlugin {
         throw new Error(`Missing required attribute: ${attr}`);
       }
     }
+  }
+
+  /**
+   * Tell whether a CSV column names a `fixed` schema attribute, in any case.
+   */
+  private isFixedAttribute(schema: BulkImportSchema, column: string): boolean {
+    const lower = column.toLowerCase();
+    for (const [name, def] of Object.entries(schema.properties || {})) {
+      if (name.toLowerCase() === lower) return def.fixed === true;
+    }
+    return false;
   }
 
   /**

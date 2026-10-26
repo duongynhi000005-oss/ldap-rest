@@ -174,7 +174,7 @@ mail: jdoe@company.com
 
 ### Fixed Attributes
 
-Attributes marked as `"fixed": true` in the schema are automatically added and should NOT be included in the CSV:
+Attributes marked as `"fixed": true` in the schema take their `default` (or `const`) from the schema on both creation and `updateExisting`; a CSV column naming a fixed attribute is ignored:
 
 **Schema**:
 

@@ -410,6 +410,58 @@ describe('LDAP Bulk Import Plugin', function () {
       expect(res.body.errors[0].error).to.match(/option "lang-fr"/);
     });
 
+    it('should keep the fixed objectClass on creation and update whatever a CSV column carried', async function () {
+      this.timeout(10000);
+
+      for (const header of ['objectClass', 'OBJECTCLASS']) {
+        const createCsv = [
+          `uid,cn,sn,givenName,mail,${header},organizationDn`,
+          `bulkuser1,Bulk User 1,User1,Bulk,bulkuser1@test.org,top;twakeAccount;twakeWhitePages;extensibleObject,"${getTestOrg1Dn()}"`,
+        ].join('\n');
+
+        const created = await request
+          .post('/api/v1/ldap/bulk-import/testusers')
+          .attach('file', Buffer.from(createCsv), 'test.csv');
+        expect(created.status).to.equal(200);
+        expect(created.body).to.include({ created: 1, failed: 0 });
+
+        let found = await server.ldap.search(
+          { paged: false, scope: 'base', attributes: ['objectClass'] },
+          `uid=bulkuser1,${process.env.DM_LDAP_BASE}`
+        );
+        expect((found as any).searchEntries[0].objectClass).to.have.members([
+          'top',
+          'twakeAccount',
+          'twakeWhitePages',
+        ]);
+
+        const updateCsv = [
+          `uid,cn,sn,givenName,mail,${header},organizationDn`,
+          `bulkuser1,Updated User 1,User1,Bulk,bulkuser1@test.org,top;person,"${getTestOrg1Dn()}"`,
+        ].join('\n');
+
+        const updated = await request
+          .post('/api/v1/ldap/bulk-import/testusers')
+          .attach('file', Buffer.from(updateCsv), 'test.csv')
+          .field('updateExisting', 'true');
+        expect(updated.status).to.equal(200);
+        expect(updated.body).to.include({ updated: 1, failed: 0 });
+
+        found = await server.ldap.search(
+          { paged: false, scope: 'base', attributes: ['objectClass', 'cn'] },
+          `uid=bulkuser1,${process.env.DM_LDAP_BASE}`
+        );
+        expect((found as any).searchEntries[0].cn).to.equal('Updated User 1');
+        expect((found as any).searchEntries[0].objectClass).to.have.members([
+          'top',
+          'twakeAccount',
+          'twakeWhitePages',
+        ]);
+
+        await server.ldap.delete(`uid=bulkuser1,${process.env.DM_LDAP_BASE}`);
+      }
+    });
+
     it('should handle multi-value attributes', async function () {
       this.timeout(10000);
 
